@@ -1,3 +1,4 @@
+import compression from "compression";
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -63,6 +64,7 @@ app.use("/", mapsRouter);
 app.use("/", charactersRouter);
 app.use("/", combatRouter);
 app.use("/", presetsRouter);
+app.use(compression());
 
 
 app.listen(PORT, () => {
