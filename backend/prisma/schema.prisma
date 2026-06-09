@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum GameRole {
+  DM
+  PLAYER
+}
+
+enum CombatantType {
+  PLAYER
+  ENEMY
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  characters   Character[]
+  memberships  GameMember[]
+  createdGames Game[]          @relation("GameDM")
+  selections   GameCharacter[]
+}
+
+model Game {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  inviteCode  String   @unique
+  dmUserId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dm              User             @relation("GameDM", fields: [dmUserId], references: [id])
+  members         GameMember[]
+  selections      GameCharacter[]
+  battleMaps      BattleMap[]
+  combatEncounter CombatEncounter?
+
+  @@index([dmUserId])
+}
+
+model GameMember {
+  id       String   @id @default(cuid())
+  gameId   String
+  userId   String
+  role     GameRole @default(PLAYER)
+  joinedAt DateTime @default(now())
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId])
+  @@index([userId])
+}
+
+model Character {
+  id           String  @id @default(cuid())
+  ownerUserId  String
+  name         String
+  raceId       String?
+  classId      String?
+  subclassId   String?
+  backgroundId String?
+  level        Int     @default(1)
+
+  sheetData Json @default("{}")
+
+  tokenImagePath    String?
+  portraitImagePath String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner      User            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  selections GameCharacter[]
+  combatants Combatant[]
+
+  @@index([ownerUserId])
+}
+
+model GameCharacter {
+  id          String   @id @default(cuid())
+  gameId      String
+  userId      String
+  characterId String
+  isActive    Boolean  @default(true)
+  selectedAt  DateTime @default(now())
+
+  game      Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, userId, characterId])
+  @@index([userId])
+  @@index([characterId])
+}
+
+model BattleMap {
+  id          String   @id @default(cuid())
+  gameId      String
+  name        String
+  rows        Int
+  cols        Int
+  gridData    Json
+  isPublished Boolean  @default(false)
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@index([gameId])
+}
+
+model CombatEncounter {
+  id               String   @id @default(cuid())
+  gameId           String   @unique
+  currentTurnIndex Int      @default(0)
+  round            Int      @default(1)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  game       Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  combatants Combatant[]
+
+  @@index([gameId])
+}
+
+model Combatant {
+  id          String        @id @default(cuid())
+  encounterId String
+  type        CombatantType
+
+  characterId String?
+  ownerUserId String?
+
+  name       String
+  hp         Int
+  maxHp      Int
+  ac         Int
+  x          Int
+  y          Int
+  initiative Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  encounter CombatEncounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  character Character?      @relation(fields: [characterId], references: [id], onDelete: SetNull)
+
+  @@index([encounterId])
+  @@index([characterId])
+  @@index([ownerUserId])
+}
+
+model ClassPreset {
+  id                  String   @id
+  name                String
+  source              String
+  description         String?
+  hitDie              Int
+  primaryAbilities    String[]
+  savingThrows        String[]
+  armorTraining       String[]
+  weaponTraining      String[]
+  toolTraining        String[]
+  skillChoices        String[]
+  skillChoiceCount    Int      @default(2)
+  spellcastingType    String   @default("NONE")
+  spellcastingAbility String?
+  isOfficial          Boolean  @default(true)
+  isSrd               Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  subclasses SubclassPreset[]
+  features   ClassFeaturePreset[]
+}
+
+model SubclassPreset {
+  id            String   @id
+  classPresetId String
+  name          String
+  source        String
+  description   String?
+  role          String?
+  strength      String?
+  isSrd         Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  classPreset ClassPreset             @relation(fields: [classPresetId], references: [id], onDelete: Cascade)
+  features    SubclassFeaturePreset[]
+
+  @@index([classPresetId])
+}
+
+model ClassFeaturePreset {
+  id            String   @id @default(cuid())
+  classPresetId String
+  level         Int
+  name          String
+  summary       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  classPreset ClassPreset @relation(fields: [classPresetId], references: [id], onDelete: Cascade)
+
+  @@index([classPresetId])
+  @@index([level])
+}
+
+model SubclassFeaturePreset {
+  id               String   @id @default(cuid())
+  subclassPresetId String
+  level            Int
+  name             String
+  summary          String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  subclassPreset SubclassPreset @relation(fields: [subclassPresetId], references: [id], onDelete: Cascade)
+
+  @@index([subclassPresetId])
+  @@index([level])
+}
